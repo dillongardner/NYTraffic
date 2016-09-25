@@ -34,8 +34,9 @@ for d in root:
        
 dictionaries = []
 for day in root:
-    newDicts = dictionariesFromDay(day) for day in root]
-    dictionaries.append(newDict)
+    dictList = dictionariesFromDay(day)
+    for newDict in dictList:
+        dictionaries.append(newDict)
 tmp = pd.DataFrame(dictionaries)
 
 
