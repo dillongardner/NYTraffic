@@ -25,13 +25,17 @@ def extractDataFrameFromXML(xmlText):
              dictionaries.append(newDict)
          return(dictionaries)
        
-    root = ET.fromstring(xmlText)
-    dictionaries = []
-    for day in root:
-        dictList = dictionariesFromDay(day)
-        for newDict in dictList:
-            dictionaries.append(newDict)
-    df = pd.DataFrame(dictionaries, dtype=int)
+    try: 
+        root = ET.fromstring(xmlText)
+        dictionaries = []
+        for day in root:
+            dictList = dictionariesFromDay(day)
+            for newDict in dictList:
+                dictionaries.append(newDict)
+        df = pd.DataFrame(dictionaries, dtype=int)
+    except:
+        print("Error converting to dataframe. Check XML")
+        df=None
     return(df)
 
 def getXMLFiles():
@@ -42,12 +46,15 @@ def getXMLFiles():
     for link in xmlLinks:
         try:
             xmlRequest = requests.get(xmlStub + link["href"])
-            xmlList.append(xmlRequest.text)
+            # Check to see if properly formated xml
+            # There mus be a better way?
+            root = ET.fromstring(xmlRequest.text)
+            yield xmlRequest.text
         except: 
             print("Error on file: " + link.text)
-    return(xmlList)
     
 
 xmlList = getXMLFiles()
 df = pd.concat(map(extractDataFrameFromXML, xmlList))
+
 
