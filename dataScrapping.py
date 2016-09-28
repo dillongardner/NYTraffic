@@ -11,15 +11,10 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 
 pageURL = "http://web.mta.info/developers/data/bandt/trafficdata.html"
-soup = BeautifulSoup(pageStart.text)
 xmlStub = "http://web.mta.info/developers/data/bandt/"
 
-tmp = soup.find_all("div", class_="span-39 last")[0].find_all("a")[0]["href"]
-xmlFile = requests.get(xmlStub + tmp)
 
-root = ET.fromstring(xmlFile.text)
-
-def extractDataFrameFromXML(xmlFile):
+def extractDataFrameFromXML(xmlText):
     ''' Convert XML file of MTA data to a DataFrame'''
     
     def dictionariesFromDay(day):
@@ -30,6 +25,7 @@ def extractDataFrameFromXML(xmlFile):
              dictionaries.append(newDict)
          return(dictionaries)
        
+    root = ET.fromstring(xmlText)
     dictionaries = []
     for day in root:
         dictList = dictionariesFromDay(day)
@@ -39,5 +35,19 @@ def extractDataFrameFromXML(xmlFile):
     return(df)
 
 def getXMLFiles():
-    soup = BeautifulSoup(requests.get(pageURL).text)
+    soup = BeautifulSoup(requests.get(pageURL).text, "lxml")
+    xmlTag = soup.find("div", class_="span-39 last")
+    xmlLinks = xmlTag.find_all("a")
+    xmlList = []
+    for link in xmlLinks:
+        try:
+            xmlRequest = requests.get(xmlStub + link["href"])
+            xmlList.append(xmlRequest.text)
+        except: 
+            print("Error on file: " + link.text)
+    return(xmlList)
+    
+
+xmlList = getXMLFiles()
+df = pd.concat(map(extractDataFrameFromXML, xmlList))
 
