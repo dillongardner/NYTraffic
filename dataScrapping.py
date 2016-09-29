@@ -2,10 +2,21 @@
 """
 Created on Sat Sep 24 11:19:31 2016
 
+Downloads XML data files from trafffic at 
+http://web.mta.info/developers/data/bandt/trafficdata.html
+
+Formats and saves the data to a feather file
+
+If run as a script, will accept and arguement for the location of the feather
+files
+
 @author: Dillon R. Gardner
 """
 
 import requests
+import feather
+import os
+import sys
 import pandas as pd
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
@@ -54,7 +65,17 @@ def getXMLFiles():
             print("Error on file: " + link.text)
     
 
-xmlList = getXMLFiles()
-df = pd.concat(map(extractDataFrameFromXML, xmlList))
+if __name__ == "__main__":
+    if(len(sys.argv) > 1):
+        path = sys.argv[1]
+    else:
+        path = os.getcwd()
+    print("Downloading XML Files....")
+    xmlList = getXMLFiles()
+    df = pd.concat(map(extractDataFrameFromXML, xmlList))
+    print("Saving to " + path)
+    feather.write_dataframe(df, path + "/NYTrafficData.feather")
+    
+
 
 
