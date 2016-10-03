@@ -1,0 +1,126 @@
+---
+title: "Seasonal Trends in New York City Traffic: STL Part I"
+author: "Dillon R. Gardner"
+date: "September 29, 2016"
+output: html_document
+---
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(feather)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stlplus)
+library(lubridate)
+```
+
+<!-- Loading and formatting data -->
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
+library(feather)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stlplus)
+library(lubridate)
+myData <- read_feather("NYTrafficData.feather")
+myData <- myData[!duplicated(myData),]
+
+# Convert Date column from character to date object
+myData$Date <-  lubridate::mdy(myData$Date)
+
+# Some dates have multiple entries for each id.
+# Looks like this happens with one having cash reported as 0
+# We'll just take the highest value for each date
+myData <- myData %>% 
+  mutate(total_count=`cash-count` + `etc-count`) %>%
+  group_by(Date, id) %>%
+  arrange(desc(total_count)) %>%
+  slice(1L) %>% 
+  ungroup()
+
+wideData <- myData %>%
+  select(Date, id, total_count) %>%
+  spread(id, total_count)
+
+fullDateRange <- data_frame(Date=seq(wideData$Date[1], 
+                                     tail(wideData$Date, 1),
+                                     by="1 day"))
+
+fullDataWide <- left_join(fullDateRange, wideData, by="Date")
+fullDataLong <- gather(fullDataWide, "id", "total_count", -Date)
+
+jfkManhattan <- select(fullDataWide, Date, Total=`2`)
+jfkManhattan$Total <- jfkManhattan$Total / 1000
+```
+
+<!-- ggplot of data -->
+```{r, echo=FALSE}
+
+ggplot(jfkManhattan) + 
+  geom_line(aes(x=Date, y=Total), color="red") +
+  labs(title="JFK Bridge - Manhattan Plaza",
+       y="Total Vehicles (thous.)",
+       x="Date") + 
+  ylim(0,125)
+```
+
+
+Everyone knows that traffic is much worse during the week than Sundays. But how much so? And how much does traffic change from month to month? Does traffic decrease in the summer because people take vacation... or do those vacationers clog the roadways? Given all of these fluctuations in traffic, how do we quantify long term trends?
+
+In data science, these questions fall are referred to as _seasonality_. A wonderful technique to address these questions is Seasonal and Trend decomposition using LOESS (STL). This the first of a three part series on STL. In this post, we'll look at a test case of traffic from the John F. Kennedy Bridge in Manhattan. Part II delves into the weeds of how this works, and Part III discusses how STL can be used for imputing data over missing values, a key advantage over other means of decomposition.
+
+The dataset we have is of total daily tolls across the JFK bridge. The data were scrapped from the [MTA][dataLocation]. All of the data aggregation and analysis including this post in .Rmd form is available on [GitHub][source]. The cleaned data is a time series of daily data from March 2012 through September 2016.
+
+```{r}
+head(jfkManhattan)
+```
+
+From the plot at the top of the post, there is a clear yearly pattern. Traffic peaks in the summer and drops down, bottoming out around the January or February. On top of this pattern, there is a general increase in traffic over time.
+
+To quantify this behavior the monthly trend, we aggregate the data from daily totals to the daily average for each month. 
+
+```{r}
+library(dplyr)
+monthlyData <- jfkManhattan
+day(monthlyData$Date) <- 1
+monthlyData <- monthlyData %>%
+  group_by(Date) %>%
+  summarise_each(funs(mean(., na.rm=T))) %>%
+  select(Date, DailyAverage=Total)
+```
+
+
+The decomposition takes the average daily traffic for each month as the sum of three components: a seasonal component, a trend component, and the remainder.
+
+$$ MonthlyTraffic_t = Seasonal_t + Trend_t + Remainder_t $$ 
+
+[STL][Cleveland] is a particular algorithm to make this separation. The `stl` function exists in base R, but the `stlplus` package implements the same algorithm while allowing for missing data. It also has some nicer plotting features. The details of the algorithm are address in PartII. But the important parameter is `n.p`, which is the number of measurements in a full period of seasonal behavior. Since our data is now monthly and we anticipate yearly seasonality, `n.p = 12`
+
+```{r}
+library(stlplus)
+monthlySTL <- stlplus(monthlyData$DailyAverage, t=monthlyData$Date,
+                      n.p=12, s.window="periodic",
+                      sub.start=3, sub.labels = month.name)
+
+plot(monthlySTL)
+```
+
+
+The result is a quantification of exactly what our eye told us. The average daily usage for each month follows a yearly pattern visible in the "seasonal" component. The decomposition is done such that this component averages out to nearly zero over each period. This makes the trend interpretable as the average value over time, excluding the periodic fluctuations. Overall, the trend line shows that traffic has increased by almost 10 percent over the past four years. The remainder is whatever short fluctations are not captured in the other two components.
+
+Of course, there is a potentail problem with the analysis so far. By aggregating data to monthly, we ignored the fact that there are also variations in traffic over the course of the week. Since weeks do not evenly fit into months, some months will have 5 Mondays and 4 Sundays. Other months, will have the opposite. This weekly variation will therefore affect the measured monthly average. This is exacerbated by the fact that the dataset is not complete and is missing some days. This sort of problem is endemic in trying to extract seasonal behavior from timeseries data. The lack of consistency of days and weeks in months, days in years, indivisibility of weeks into years, changing dates of holidays
+
+We can address this problem by first performing STL on the daily data to extract the weekly seasonality.
+
+```{r}
+stlDaily <- stlplus(jfkManhattan$Total,t=jfkManhattan$Date,
+                    n.p=7, s.window=25,
+                    sub.labels=c("Sun", "Mon", "Tues",
+                                 "Wed", "Thur", "Fri", "Sat"))
+
+plot(stlDaily)
+```
+
+
+[Cleveland]: http://www.wessa.net/download/stl.pdf
+[dataLocation]: http://web.mta.info/developers/data/bandt/trafficdata.html
+[source]: https://github.com/dillongardner/NYTraffic

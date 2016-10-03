@@ -41,6 +41,10 @@ fullDataLong <- gather(fullDataWide, "id", "total_count", -Date)
 # Plot Data
 ##########################################################################
 
+ggplot(fullDataLong) + 
+  geom_line(aes(x=Date, y=total_count, color=id)) +
+  facet_grid(id ~ .)
+
 p <- ggplot(fullDataLong %>% filter(id==1)) + 
   geom_point(aes(x=Date, y=total_count, color=id))
 plotly::ggplotly(p)
@@ -52,16 +56,28 @@ monthlyWide <- monthlyWide %>%
   group_by(Date) %>%
   summarise_each(funs(mean(., na.rm=T)))
 
-stlDaily <- stlplus(fullDataWide$`9`,t=fullDataWide$Date,
-                    n.p=7, s.window="periodic",
+stlDaily <- stlplus(fullDataWide$`2`,t=fullDataWide$Date,
+                    n.p=7, s.window=25,
                     sub.labels=c("Sun", "Mon", "Tues",
                                  "Wed", "Thur", "Fri", "Sat"))
-stlMonthly <- stlplus(monthlyWide$`9`, t=monthlyWide$Date,
+
+plot(stlDaily)
+plot_cycle(stlDaily)
+plot_seasonal(stlDaily)
+
+stlSubtractedData <- select(fullDataWide, Date, total=`2`)
+stlSubtractedData$total <- stlSubtractedData$total - stlDaily$data$seasonal
+monthlyWide <- stlSubtractedData
+day(monthlyWide$Date) <- 1
+monthlyWide <- monthlyWide %>%
+  group_by(Date) %>%
+  summarise_each(funs(mean(., na.rm=T)))
+
+stlMonthly <- stlplus(monthlyWide$total, t=monthlyWide$Date,
                       n.p=12, s.window="periodic",
                       sub.start=3, sub.labels = month.name)
 
 plot(stlMonthly)
 plot_cycle(stlMonthly)
-plot(stlDaily)
-plot_cycle(stlDaily)
-plot_seasonal(stlDaily)
+plot_seasonal(stlMonthly)
+
