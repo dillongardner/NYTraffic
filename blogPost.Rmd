@@ -11,6 +11,7 @@ library(tidyr)
 library(ggplot2)
 library(stlplus)
 library(lubridate)
+library(gridExtra)
 ```
 
 <!-- Loading and formatting data -->
@@ -55,12 +56,14 @@ jfkManhattan$Total <- jfkManhattan$Total / 1000
 <!-- ggplot of data -->
 ```{r, echo=FALSE}
 
-ggplot(jfkManhattan) + 
-  geom_line(aes(x=Date, y=Total), color="steelblue") +
-  labs(title="JFK Bridge - Manhattan Plaza",
-       y="Total Vehicles (thous.)",
-       x="Date") + 
-  ylim(0,125)
+plot(x=jfkManhattan$Date, y=jfkManhattan$Total, col="steelblue", type="l",bty="n",
+     yaxt="n", xaxt="n", 
+     xlab="Date", ylab="Total Vehicles (thous.)",
+     ylim = c(0,120))
+axis(side = 2,at=c(0, 50, 100),tick=F)
+axis(side = 1,at=seq(as.Date("2012/6/1"), as.Date("2016/6/1"), length=5),
+     labels = paste0("6/1/",seq(2012, 2016, 1)),tick=F)
+title("JFK Bridge - Manhattan Plaza")
 ```
 
 
@@ -97,9 +100,12 @@ $$ MonthlyTraffic_t = Seasonal_t + Trend_t + Remainder_t $$
 
 ```{r}
 library(stlplus)
+monthNames <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
 stlMonthly <- stlplus(monthlyData$DailyAverage, t=monthlyData$Date,
                       n.p=12, s.window="periodic",
-                      sub.start=3, sub.labels = month.name)
+                      sub.start=3, sub.labels = monthNames)
 
 plot(stlMonthly, xlab="Date", ylab="Mean Daily Vehicles (thous.)")
 ```
@@ -112,10 +118,11 @@ Of course, there is a potential problem with the analysis so far. By aggregating
 We can address this problem by first performing STL on the daily data to extract the weekly seasonality. Now that it is daily data and the seasonality is seven days, we set `n.p=7`.
 
 ```{r}
+weekDays <- c("Sun", "Mon", "Tues","Wed", "Thur", "Fri", "Sat")
+
 stlDaily <- stlplus(jfkManhattan$Total,t=jfkManhattan$Date,
                     n.p=7, s.window=25,
-                    sub.labels=c("Sun", "Mon", "Tues",
-                                 "Wed", "Thur", "Fri", "Sat"))
+                    sub.labels=weekDays, sub.start=1)
 
 plot(stlDaily, xlab="Date", ylab="Daily Vehicles (thous.)")
 ```
@@ -139,15 +146,26 @@ normalizedData <- normalizedData %>%
 
 stlNormalizedMonthly <- stlplus(normalizedData$Total, t=normalizedData$Date,
                                 n.p=12, s.window="periodic",
-                                sub.start=3, sub.labels = month.name)
+                                sub.start=3, sub.labels = monthNames)
 
 plot(stlNormalizedMonthly, xlab="Date", ylab="Daily Vehicles (thous.)")
 ```
 
 The result hasn't changed much. The sum of the absolute value of the remainder is slightly smaller, which means more of the data is captured in the seasonal and trend terms. But more importantly, this excludes a possible error in our analysis making the conclusions more robust.
 
+A insightful way of looking at the decomposition, is plotting the seasonal component by the subseries. A subseries is the set of observations of one season type. For example, all of the Mondays, or all of the Januaries. The plot for Mondays is a time series of the seasonal component across the whole time range of the data set. These plots provide a clear picture of how the seasonality changes over time.
+
+```{r, warning=FALSE}
+library(gridExtra)
+p1 <- plot_cycle(stlNormalizedMonthly, ylim=c(-17, 17))
+p2 <- plot_cycle(stlDaily, ylim=c(-17, 17))
+grid.arrange(p1,p2, ncol=2)
+```
+
+
 ### Conclusions
-This has shown how STL can be used to assess the seasonal components of a time series. Unsurprisingly, traffic on the JFK bridge shows a strongly weekly seasonality. Sundays are the smallest
+
+This has shown how STL can be used to assess the seasonal components of a time series. Using this technique on the traffic on the JFK bridges shows that, nsurprisingly, traffic has a strong weekly seasonality. This approach allows us to quantify that the difference between a typical Sunday and a typical Thursday or Friday is 15-18 thousand vehicles, which about 15-20% of the total traffic. More surprising, the difference between a typical day in January and a day in June is about 23 thousand vehicles. The STL trend component shows that traffic has increased from an average of 84 thousand vehicles to to 92 thousand vehicles (about 10%) since 2012.
 
 [Cleveland]: http://www.wessa.net/download/stl.pdf
 [dataLocation]: http://web.mta.info/developers/data/bandt/trafficdata.html
