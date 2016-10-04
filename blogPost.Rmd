@@ -56,7 +56,7 @@ jfkManhattan$Total <- jfkManhattan$Total / 1000
 ```{r, echo=FALSE}
 
 ggplot(jfkManhattan) + 
-  geom_line(aes(x=Date, y=Total), color="red") +
+  geom_line(aes(x=Date, y=Total), color="steelblue") +
   labs(title="JFK Bridge - Manhattan Plaza",
        y="Total Vehicles (thous.)",
        x="Date") + 
@@ -76,7 +76,7 @@ head(jfkManhattan)
 
 From the plot at the top of the post, there is a clear yearly pattern. Traffic peaks in the summer and drops down, bottoming out around the January or February. On top of this pattern, there is a general increase in traffic over time.
 
-To quantify this behavior the monthly trend, we aggregate the data from daily totals to the daily average for each month. 
+To quantify this behavior the monthly trend we aggregate the data from daily totals to the daily average for each month.
 
 ```{r}
 library(dplyr)
@@ -97,19 +97,19 @@ $$ MonthlyTraffic_t = Seasonal_t + Trend_t + Remainder_t $$
 
 ```{r}
 library(stlplus)
-monthlySTL <- stlplus(monthlyData$DailyAverage, t=monthlyData$Date,
+stlMonthly <- stlplus(monthlyData$DailyAverage, t=monthlyData$Date,
                       n.p=12, s.window="periodic",
                       sub.start=3, sub.labels = month.name)
 
-plot(monthlySTL)
+plot(stlMonthly, xlab="Date", ylab="Mean Daily Vehicles (thous.)")
 ```
 
 
-The result is a quantification of exactly what our eye told us. The average daily usage for each month follows a yearly pattern visible in the "seasonal" component. The decomposition is done such that this component averages out to nearly zero over each period. This makes the trend interpretable as the average value over time, excluding the periodic fluctuations. Overall, the trend line shows that traffic has increased by almost 10 percent over the past four years. The remainder is whatever short fluctations are not captured in the other two components.
+The top plot is the raw monthly aggregated data. Once the seasonal and trend components are fit, they are subtracted from the raw data to give the remainder. The result quantifies exactly what our eye told us. The average daily usage for each month follows a yearly pattern visible in the "seasonal" component. The decomposition is done such that this component averages out to nearly zero over each period. This makes the trend interpretable as the average value over time, excluding the periodic fluctuations. Overall, the trend line shows that traffic has increased by almost 10 percent over the past four years. The remainder is whatever short fluctuations are not captured in the other two components. At a monthly level, this terms fairly flat with no clear anomalous months.
 
-Of course, there is a potentail problem with the analysis so far. By aggregating data to monthly, we ignored the fact that there are also variations in traffic over the course of the week. Since weeks do not evenly fit into months, some months will have 5 Mondays and 4 Sundays. Other months, will have the opposite. This weekly variation will therefore affect the measured monthly average. This is exacerbated by the fact that the dataset is not complete and is missing some days. This sort of problem is endemic in trying to extract seasonal behavior from timeseries data. The lack of consistency of days and weeks in months, days in years, indivisibility of weeks into years, changing dates of holidays
+Of course, there is a potential problem with the analysis so far. By aggregating data to monthly, we ignored the fact that there are also variations in traffic over the course of the week. Since weeks do not evenly fit into months, some months will have 5 Mondays and 4 Sundays. Other months, will have the opposite. This weekly variation will therefore affect the measured monthly average. This is exacerbated by the fact that the dataset is not complete and is missing some days. This sort of problem is endemic in trying to extract seasonal behavior from time series data. The lack of consistency of days and weeks in months, days in years, indivisibility of weeks into years, changing dates of holidays
 
-We can address this problem by first performing STL on the daily data to extract the weekly seasonality.
+We can address this problem by first performing STL on the daily data to extract the weekly seasonality. Now that it is daily data and the seasonality is seven days, we set `n.p=7`.
 
 ```{r}
 stlDaily <- stlplus(jfkManhattan$Total,t=jfkManhattan$Date,
@@ -117,9 +117,37 @@ stlDaily <- stlplus(jfkManhattan$Total,t=jfkManhattan$Date,
                     sub.labels=c("Sun", "Mon", "Tues",
                                  "Wed", "Thur", "Fri", "Sat"))
 
-plot(stlDaily)
+plot(stlDaily, xlab="Date", ylab="Daily Vehicles (thous.)")
 ```
 
+Unsurprisingly, the daily variation is quite strong. Saturdays and Sundays have the least traffic (This decomposition shows a couple new aspects of STL. 
+
+1. Even though the raw data has some missing data, the seasonal and trend components are complete. The pink data are the imputations. How this is accomplished will be discussed in the later posts in this series.
+2. The seasonal component is not completely periodic every seven days. There is additional structure to the seasonal trend. The difference between weekday and weekend traffic is smaller in the summer than in the winter. The ability to capture slow changes in the seasonal terms is a key advatage of STL over other decomposition methods such as `decompose` in R and `seasonal_decompose` in Python.
+3. The remainder term now has a lot more strucutre. Every year around the winter holidays, there are a series of big negative spikes.
+4. The trend component now exhibits the year long oscillation we had previously described as seasonal. This is a key point about any seasonal decomposition: the division of the data into these three components is, to a degree, a matter of opinion. Changing model parameters and time scales shifts activity from one component to another. There is no "true" decomposition.
+
+Next step, we subtract the seasonal component from the raw data. Because the seasonal component averages to (approximately) zero, this does not change the total traffic over the data set. Now, the value for each day is interpreted as how many vehicles passed adjusted for the day of the week. This should allow a Sunday to be compared to Monday. The higher value means that there was more traffic compared to a typical day. This also solves the problem of weekly variation affecting monthly aggregation.
+
+```{r}
+normalizedData <- jfkManhattan
+normalizedData$Total <- normalizedData$Total - stlDaily$data$seasonal
+day(normalizedData$Date) <- 1
+normalizedData <- normalizedData %>%
+  group_by(Date) %>%
+  summarise_each(funs(mean(., na.rm=T)))
+
+stlNormalizedMonthly <- stlplus(normalizedData$Total, t=normalizedData$Date,
+                                n.p=12, s.window="periodic",
+                                sub.start=3, sub.labels = month.name)
+
+plot(stlNormalizedMonthly, xlab="Date", ylab="Daily Vehicles (thous.)")
+```
+
+The result hasn't changed much. The sum of the absolute value of the remainder is slightly smaller, which means more of the data is captured in the seasonal and trend terms. But more importantly, this excludes a possible error in our analysis making the conclusions more robust.
+
+### Conclusions
+This has shown how STL can be used to assess the seasonal components of a time series. Unsurprisingly, traffic on the JFK bridge shows a strongly weekly seasonality. Sundays are the smallest
 
 [Cleveland]: http://www.wessa.net/download/stl.pdf
 [dataLocation]: http://web.mta.info/developers/data/bandt/trafficdata.html
