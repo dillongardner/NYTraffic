@@ -1,5 +1,5 @@
 ---
-title: "Seasonal Trends in New York City Traffic: STL Part I"
+title: 'Seasonal Trends in New York City Traffic: STL Part I'
 author: "Dillon R. Gardner"
 date: "September 29, 2016"
 output: html_document
@@ -57,12 +57,13 @@ jfkManhattan$Total <- jfkManhattan$Total / 1000
 ```{r, echo=FALSE}
 
 plot(x=jfkManhattan$Date, y=jfkManhattan$Total, col="steelblue", type="l",bty="n",
-     yaxt="n", xaxt="n", 
+     yaxt="n", xaxt="n",
      xlab="Date", ylab="Total Vehicles (thous.)",
-     ylim = c(0,120))
+     ylim = c(0,130))
 axis(side = 2,at=c(0, 50, 100),tick=F)
 axis(side = 1,at=seq(as.Date("2012/6/1"), as.Date("2016/6/1"), length=5),
      labels = paste0("6/1/",seq(2012, 2016, 1)),tick=F)
+     #labels = paste0("",seq(2012, 2016, 1)),tick=F)
 title("JFK Bridge - Manhattan Plaza")
 ```
 
@@ -161,6 +162,7 @@ p1 <- plot_cycle(stlNormalizedMonthly, ylim=c(-17, 17))
 p2 <- plot_cycle(stlDaily, ylim=c(-17, 17))
 grid.arrange(p1,p2, ncol=2)
 ```
+
 
 
 ### Conclusions
