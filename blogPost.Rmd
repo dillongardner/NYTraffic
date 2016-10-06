@@ -15,7 +15,7 @@ library(gridExtra)
 ```
 
 <!-- Loading and formatting data -->
-```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
 library(feather)
 library(dplyr)
 library(tidyr)
@@ -92,7 +92,7 @@ $$ DailyTraffic_t = Seasonal_t + Trend_t + Remainder_t $$
 
 
 ```{r}
-weekDays <- c("Sun", "Mon", "Tues","Wed", "Thur", "Fri", "Sat")
+weekDays <- c("Su", "M", "Tu","W", "Th", "F", "Sa")
 
 stlDaily <- stlplus(jfkManhattan$Total,t=jfkManhattan$Date,
                     n.p=7, s.window=25,
@@ -125,8 +125,7 @@ normalizedData <- normalizedData %>%
   group_by(Date) %>%
   summarise_each(funs(mean(., na.rm=T)))
 
-monthNames <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+monthNames <- c("Ja", "F", "Mr", "Ap", "Ma", "Jn", "Jl", "Au", "S", "O", "N", "D")
 stlNormalizedMonthly <- stlplus(normalizedData$Total, t=normalizedData$Date,
                                 n.p=12, s.window="periodic",
                                 sub.start=3, sub.labels = monthNames)
